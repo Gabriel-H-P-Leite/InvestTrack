@@ -3,6 +3,7 @@ import {
   Bell,
   ChevronRight,
   Info,
+  LogOut,
   RefreshCw,
   Settings,
   Shield,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useApp } from '@/context/AppContext'
+import { useAuth } from '@/context/AuthContext'
 import { Card, Badge, DemoBadge } from '@/components/ui/Primitives'
 import { EditarPerfilModal } from '@/components/forms/EditarPerfilModal'
 import { useToast } from '@/context/ToastContext'
@@ -18,6 +20,7 @@ import { initials } from '@/lib/utils'
 
 export default function Perfil() {
   const { state, dispatch } = useApp()
+  const { sair } = useAuth()
   const { toast } = useToast()
   const [modal, setModal] = useState<'perfil' | 'risco' | 'preferencias' | null>(null)
   const [confirmando, setConfirmando] = useState(false)
@@ -65,6 +68,7 @@ export default function Perfil() {
           subtitle="Restaurar dados demonstrativos"
           onClick={() => setConfirmando(true)}
         />
+        <MenuItem icon={LogOut} title="Sair da conta" subtitle={state.perfil.email} onClick={sair} />
       </Card>
 
       <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/[0.08] p-4 text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
   Ativo,
   ContaFinanceira,
@@ -12,24 +12,14 @@ import type {
   TipoOperacao,
 } from '@/types'
 import {
-  seedAtivos,
-  seedContaFinanceira,
   seedEvolucaoPatrimonio,
   seedFluxoFinanceiro,
-  seedMetas,
-  seedModulos,
-  seedMovimentacoes,
-  seedNotificacoes,
-  seedPerfil,
-  seedProventos,
   seedRentabilidadeHistorico,
-  seedTransacoes,
 } from '@/lib/mockData'
-import { uid } from '@/lib/utils'
+import { api } from '@/lib/api'
+import { useAuth } from '@/context/AuthContext'
 
-const STORAGE_KEY = 'investtrack-demo-state-v1'
-
-interface AppState {
+export interface AppState {
   perfil: Perfil
   contaFinanceira: ContaFinanceira
   ativos: Ativo[]
@@ -41,31 +31,32 @@ interface AppState {
   notificacoes: Notificacao[]
 }
 
-function seedState(): AppState {
-  return {
-    perfil: seedPerfil,
-    contaFinanceira: seedContaFinanceira,
-    ativos: seedAtivos,
-    transacoes: seedTransacoes,
-    movimentacoes: seedMovimentacoes,
-    proventos: seedProventos,
-    metas: seedMetas,
-    modulos: seedModulos,
-    notificacoes: seedNotificacoes,
-  }
+const ESTADO_VAZIO: AppState = {
+  perfil: {
+    nome: '',
+    email: '',
+    perfilRisco: 'Moderado',
+    moeda: 'BRL — Real Brasileiro',
+    idioma: 'Português (Brasil)',
+    tema: 'Escuro',
+  },
+  contaFinanceira: {
+    saldo: 0,
+    totalEntradas: 0,
+    totalSaidas: 0,
+    transferidoParaCarteira: 0,
+    resgatado: 0,
+  },
+  ativos: [],
+  transacoes: [],
+  movimentacoes: [],
+  proventos: [],
+  metas: [],
+  modulos: [],
+  notificacoes: [],
 }
 
-function loadInitialState(): AppState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as AppState
-  } catch {
-    // ignore corrupted storage
-  }
-  return seedState()
-}
-
-type Action =
+export type Action =
   | { type: 'DEPOSITAR'; valor: number; metodo: string }
   | { type: 'SACAR'; valor: number; metodo: string }
   | { type: 'TRANSFERIR_PARA_CARTEIRA'; valor: number }
@@ -89,209 +80,52 @@ type Action =
   | { type: 'ATUALIZAR_PERFIL'; data: Partial<Perfil> }
   | { type: 'RESTAURAR_DADOS_DEMO' }
 
-function reducer(state: AppState, action: Action): AppState {
+/** Traduz cada ação do front em uma chamada à API. O backend devolve o estado
+ *  completo já atualizado, que passa a ser a fonte da verdade. */
+function chamadaDaAcao(action: Action): Promise<AppState> {
   switch (action.type) {
-    case 'DEPOSITAR': {
-      const mov: Movimentacao = {
-        id: uid('mov'),
-        titulo: `Depósito — ${action.metodo}`,
-        tipo: 'Depósito',
-        metodo: action.metodo,
-        data: new Date().toISOString().slice(0, 10),
-        valor: action.valor,
-        status: 'Concluído',
-      }
-      return {
-        ...state,
-        contaFinanceira: {
-          ...state.contaFinanceira,
-          saldo: state.contaFinanceira.saldo + action.valor,
-          totalEntradas: state.contaFinanceira.totalEntradas + action.valor,
-        },
-        movimentacoes: [mov, ...state.movimentacoes],
-      }
-    }
-    case 'SACAR': {
-      const mov: Movimentacao = {
-        id: uid('mov'),
-        titulo: `Saque — ${action.metodo}`,
-        tipo: 'Saque',
-        metodo: action.metodo,
-        data: new Date().toISOString().slice(0, 10),
-        valor: -action.valor,
-        status: 'Concluído',
-      }
-      return {
-        ...state,
-        contaFinanceira: {
-          ...state.contaFinanceira,
-          saldo: state.contaFinanceira.saldo - action.valor,
-          totalSaidas: state.contaFinanceira.totalSaidas + action.valor,
-        },
-        movimentacoes: [mov, ...state.movimentacoes],
-      }
-    }
-    case 'TRANSFERIR_PARA_CARTEIRA': {
-      const mov: Movimentacao = {
-        id: uid('mov'),
-        titulo: 'Transferência para investimentos',
-        tipo: 'Transferência para Invest.',
-        data: new Date().toISOString().slice(0, 10),
-        valor: -action.valor,
-        status: 'Concluído',
-      }
-      return {
-        ...state,
-        contaFinanceira: {
-          ...state.contaFinanceira,
-          saldo: state.contaFinanceira.saldo - action.valor,
-          transferidoParaCarteira: state.contaFinanceira.transferidoParaCarteira + action.valor,
-        },
-        movimentacoes: [mov, ...state.movimentacoes],
-      }
-    }
-    case 'RESGATAR': {
-      const mov: Movimentacao = {
-        id: uid('mov'),
-        titulo: 'Resgate de investimentos',
-        tipo: 'Resgate de Invest.',
-        data: new Date().toISOString().slice(0, 10),
-        valor: action.valor,
-        status: 'Concluído',
-      }
-      return {
-        ...state,
-        contaFinanceira: {
-          ...state.contaFinanceira,
-          saldo: state.contaFinanceira.saldo + action.valor,
-          resgatado: state.contaFinanceira.resgatado + action.valor,
-        },
-        movimentacoes: [mov, ...state.movimentacoes],
-      }
-    }
-    case 'ADICIONAR_ATIVO': {
-      const novo: Ativo = { id: uid('ativo'), ...action.ativo }
-      return { ...state, ativos: [novo, ...state.ativos] }
-    }
-    case 'ADICIONAR_TRANSACAO': {
-      const { tipo, quantidade, precoUnitario, taxas, data } = action
-      const total = quantidade * precoUnitario
-      let ativos = [...state.ativos]
-      let ativoId = action.ativoId
-      let ticker = ''
-      let contaFinanceira = { ...state.contaFinanceira }
-      let proventos = [...state.proventos]
-
-      if (ativoId) {
-        const idx = ativos.findIndex((a) => a.id === ativoId)
-        if (idx >= 0) {
-          const ativo = ativos[idx]
-          ticker = ativo.ticker
-          if (tipo === 'Compra' || tipo === 'Aporte') {
-            const novaQtd = ativo.quantidade + quantidade
-            const novoPrecoMedio =
-              (ativo.quantidade * ativo.precoMedio + quantidade * precoUnitario) / (novaQtd || 1)
-            ativos[idx] = { ...ativo, quantidade: novaQtd, precoMedio: novoPrecoMedio }
-          } else if (tipo === 'Venda' || tipo === 'Resgate') {
-            const novaQtd = Math.max(0, ativo.quantidade - quantidade)
-            ativos[idx] = { ...ativo, quantidade: novaQtd }
-          } else if (tipo === 'Dividendo') {
-            proventos = [
-              {
-                id: uid('prov'),
-                ticker: ativo.ticker,
-                tipo: 'Dividendo',
-                data,
-                valor: total,
-                yieldPct: Number(((total / (ativo.precoMedio * ativo.quantidade || 1)) * 100).toFixed(2)),
-              },
-              ...proventos,
-            ]
-          }
-        }
-      } else if (action.novoAtivo) {
-        const novo: Ativo = {
-          id: uid('ativo'),
-          ...action.novoAtivo,
-          quantidade,
-          precoMedio: precoUnitario,
-        }
-        ativos = [novo, ...ativos]
-        ativoId = novo.id
-        ticker = novo.ticker
-      }
-
-      // impacto no saldo da conta financeira
-      if (tipo === 'Compra' || tipo === 'Aporte') {
-        contaFinanceira.saldo -= total + taxas
-      } else if (tipo === 'Venda' || tipo === 'Resgate') {
-        contaFinanceira.saldo += total - taxas
-      } else if (tipo === 'Dividendo') {
-        contaFinanceira.saldo += total
-      }
-
-      const transacao: Transacao = {
-        id: uid('tx'),
-        ativoId: ativoId ?? '',
-        ticker,
-        tipo,
-        quantidade,
-        precoUnitario,
-        taxas,
-        data,
-      }
-
-      return {
-        ...state,
-        ativos,
-        contaFinanceira,
-        proventos,
-        transacoes: [transacao, ...state.transacoes],
-      }
-    }
+    case 'DEPOSITAR':
+      return api.post<AppState>('/conta/deposito', { valor: action.valor, metodo: action.metodo })
+    case 'SACAR':
+      return api.post<AppState>('/conta/saque', { valor: action.valor, metodo: action.metodo })
+    case 'TRANSFERIR_PARA_CARTEIRA':
+      return api.post<AppState>('/conta/transferir', { valor: action.valor })
+    case 'RESGATAR':
+      return api.post<AppState>('/conta/resgatar', { valor: action.valor })
+    case 'ADICIONAR_ATIVO':
+      return api.post<AppState>('/ativos', action.ativo)
+    case 'ADICIONAR_TRANSACAO':
+      return api.post<AppState>('/transacoes', {
+        ativoId: action.ativoId,
+        tipo: action.tipo,
+        quantidade: action.quantidade,
+        precoUnitario: action.precoUnitario,
+        taxas: action.taxas,
+        data: action.data,
+      })
     case 'MARCAR_NOTIFICACAO_LIDA':
-      return {
-        ...state,
-        notificacoes: state.notificacoes.map((n) => (n.id === action.id ? { ...n, lida: true } : n)),
-      }
+      return api.patch<AppState>(`/notificacoes/${action.id}/lida`)
     case 'MARCAR_TODAS_NOTIFICACOES_LIDAS':
-      return { ...state, notificacoes: state.notificacoes.map((n) => ({ ...n, lida: true })) }
+      return api.post<AppState>('/notificacoes/ler-todas')
     case 'ADICIONAR_META':
-      return { ...state, metas: [{ id: uid('meta'), ...action.meta }, ...state.metas] }
+      return api.post<AppState>('/metas', action.meta)
     case 'APORTAR_META':
-      return {
-        ...state,
-        metas: state.metas.map((m) =>
-          m.id === action.id ? { ...m, valorAtual: m.valorAtual + action.valor } : m
-        ),
-        contaFinanceira: { ...state.contaFinanceira, saldo: state.contaFinanceira.saldo - action.valor },
-      }
+      return api.post<AppState>(`/metas/${action.id}/aporte`, { valor: action.valor })
     case 'COMPLETAR_AULA':
-      return {
-        ...state,
-        modulos: state.modulos.map((m) =>
-          m.id === action.moduloId
-            ? {
-                ...m,
-                aulas: m.aulas.map((a) =>
-                  a.id === action.aulaId ? { ...a, concluida: !a.concluida } : a
-                ),
-              }
-            : m
-        ),
-      }
+      return api.post<AppState>(`/academia/aulas/${action.aulaId}/toggle`)
     case 'ATUALIZAR_PERFIL':
-      return { ...state, perfil: { ...state.perfil, ...action.data } }
+      return api.patch<AppState>('/perfil', action.data)
     case 'RESTAURAR_DADOS_DEMO':
-      return seedState()
-    default:
-      return state
+      return api.post<AppState>('/demo/restaurar')
   }
 }
 
 interface AppContextValue {
   state: AppState
-  dispatch: React.Dispatch<Action>
+  dispatch: (action: Action) => void
+  carregando: boolean
+  erro: string | null
+  recarregar: () => Promise<void>
   derived: {
     totalInvestido: number
     valorAtualCarteira: number
@@ -311,11 +145,38 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadInitialState)
+  const { autenticado } = useAuth()
+  const [state, setState] = useState<AppState>(ESTADO_VAZIO)
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const recarregar = useCallback(async () => {
+    if (!autenticado) {
+      setState(ESTADO_VAZIO)
+      setCarregando(false)
+      return
+    }
+    try {
+      setErro(null)
+      const dados = await api.get<AppState>('/state')
+      setState(dados)
+    } catch (e: any) {
+      setErro(e?.message ?? 'Não foi possível carregar seus dados.')
+    } finally {
+      setCarregando(false)
+    }
+  }, [autenticado])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }, [state])
+    setCarregando(true)
+    recarregar()
+  }, [recarregar])
+
+  const dispatch = useCallback((action: Action) => {
+    chamadaDaAcao(action)
+      .then((novoEstado) => setState(novoEstado))
+      .catch((e: any) => setErro(e?.message ?? 'Não foi possível concluir a operação.'))
+  }, [])
 
   const derived = useMemo(() => {
     const totalInvestido = state.ativos.reduce((sum, a) => sum + a.quantidade * a.precoMedio, 0)
@@ -353,12 +214,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       dispatch,
+      carregando,
+      erro,
+      recarregar,
       derived,
       evolucaoPatrimonio: seedEvolucaoPatrimonio,
       fluxoFinanceiro: seedFluxoFinanceiro,
       rentabilidadeHistorico: seedRentabilidadeHistorico,
     }),
-    [state, derived]
+    [state, dispatch, carregando, erro, recarregar, derived]
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

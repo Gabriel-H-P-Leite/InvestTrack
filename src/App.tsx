@@ -1,8 +1,11 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppProvider } from '@/context/AppContext'
+import { AuthProvider } from '@/context/AuthContext'
 import { ToastProvider } from '@/context/ToastContext'
 import { Layout } from '@/components/layout/Layout'
+import { ProtectedRoute, PublicOnlyRoute } from '@/components/auth/ProtectedRoute'
 
+import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import ContaFinanceira from '@/pages/ContaFinanceira'
 import Carteira from '@/pages/Carteira'
@@ -19,30 +22,41 @@ import Perfil from '@/pages/Perfil'
 
 export default function App() {
   return (
-    <AppProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/conta-financeira" element={<ContaFinanceira />} />
-              <Route path="/carteira" element={<Carteira />} />
-              <Route path="/transacoes" element={<Transacoes />} />
-              <Route path="/extrato" element={<Extrato />} />
-              <Route path="/rentabilidade" element={<Rentabilidade />} />
-              <Route path="/proventos" element={<Proventos />} />
-              <Route path="/analise" element={<Analise />} />
-              <Route path="/metas" element={<Metas />} />
-              <Route path="/academia" element={<Academia />} />
-              <Route path="/simuladores" element={<Simuladores />} />
-              <Route path="/notificacoes" element={<Notificacoes />} />
-              <Route path="/perfil" element={<Perfil />} />
+    <AuthProvider>
+      <AppProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route element={<PublicOnlyRoute />}>
+                <Route path="/login" element={<Login />} />
+              </Route>
+
+              <Route element={<ProtectedRoute />}>
+                <Route element={<Layout />}>
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/conta-financeira" element={<ContaFinanceira />} />
+                  {/* Páginas de ativos: fora do menu lateral (sem cotação em tempo
+                      real), mas ainda acessíveis por URL direta. */}
+                  <Route path="/carteira" element={<Carteira />} />
+                  <Route path="/transacoes" element={<Transacoes />} />
+                  <Route path="/rentabilidade" element={<Rentabilidade />} />
+                  <Route path="/proventos" element={<Proventos />} />
+                  <Route path="/analise" element={<Analise />} />
+                  <Route path="/extrato" element={<Extrato />} />
+                  <Route path="/metas" element={<Metas />} />
+                  <Route path="/academia" element={<Academia />} />
+                  <Route path="/simuladores" element={<Simuladores />} />
+                  <Route path="/notificacoes" element={<Notificacoes />} />
+                  <Route path="/perfil" element={<Perfil />} />
+                </Route>
+              </Route>
+
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </ToastProvider>
-    </AppProvider>
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
+      </AppProvider>
+    </AuthProvider>
   )
 }

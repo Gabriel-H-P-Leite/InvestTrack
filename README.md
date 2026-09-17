@@ -1,45 +1,93 @@
 # INVESTTRACK
 
-Plataforma de gestão de investimentos — clone funcional construído com **Vite + React + TypeScript + Tailwind CSS**, feito para rodar com **[Bun](https://bun.sh)**.
+Plataforma de gestão de investimentos — **React + Vite + TypeScript + Tailwind** no front e **Node (Express) + PostgreSQL** no back, rodando com **[Bun](https://bun.sh)**.
 
-Este projeto recria a interface e os fluxos do app original (dashboard, conta financeira, carteira, transações, extrato, rentabilidade, proventos, análise, metas, academia, simuladores, notificações e perfil), com **dados mockados e estado funcional de verdade**: depositar, sacar, transferir, comprar/vender ativos, criar metas, concluir aulas etc. realmente atualizam o estado da aplicação (persistido no `localStorage` do navegador).
+Inclui cadastro/login com JWT, dados persistidos em banco (cada usuário tem os seus) e todas as telas funcionais: dashboard, conta financeira, carteira, transações, extrato, rentabilidade, proventos, análise, metas, academia, simuladores, notificações e perfil.
 
-> ⚠️ Todos os dados são fictícios ("Modo Demonstração"). Nada aqui se conecta a uma API real de investimentos.
+> ⚠️ Os dados de mercado são fictícios ("Modo Demonstração"). Não há integração com cotações reais.
 
-## Rodando com Bun
+## Rodando o projeto
 
-Instale as dependências:
+Você precisa de **Bun** e de um **PostgreSQL** rodando.
+
+### 1. Backend (`server/`)
 
 ```bash
+cd server
+cp .env.example .env     # ajuste DATABASE_URL e JWT_SECRET
 bun install
+bun run migrate          # cria as tabelas
+bun run dev              # API em http://localhost:3333
 ```
 
-Suba o servidor de desenvolvimento:
+Confira se subiu: `curl http://localhost:3333/api/health`
+
+### 2. Frontend (raiz)
 
 ```bash
-bun run dev
+cp .env.example .env     # VITE_API_URL=http://localhost:3333/api
+bun install
+bun run dev              # app em http://localhost:5173
 ```
 
-Acesse `http://localhost:5173`.
+Crie uma conta na tela de login — ela já vem com dados de demonstração para explorar.
 
 ### Build de produção
 
 ```bash
-bun run build
+bun run build   # front (gera dist/)
 bun run preview
 ```
-
-O build final fica em `dist/`.
 
 ### Verificação de tipos
 
 ```bash
-bun run lint
+bun run lint            # front
+cd server && bun run lint   # back
 ```
+
+## Autenticação
+
+- Senhas com hash **bcrypt**; sessão via **JWT** (`Authorization: Bearer <token>`).
+- O token fica no `localStorage` e é revalidado em `/api/auth/me` ao abrir o app.
+- Rotas protegidas no front por `ProtectedRoute`; no back, pelo middleware `requireAuth`.
+
+## Endpoints principais
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| POST | `/api/auth/register` | Cria conta (já semeia os dados demo) |
+| POST | `/api/auth/login` | Autentica e devolve o token |
+| GET | `/api/auth/me` | Dados do usuário logado |
+| GET | `/api/state` | Estado completo do usuário |
+| POST | `/api/conta/deposito` · `/saque` · `/transferir` · `/resgatar` | Operações da conta financeira |
+| POST | `/api/ativos` · `/api/transacoes` | Carteira e operações |
+| POST | `/api/metas` · `/api/metas/:id/aporte` | Metas |
+| PATCH | `/api/notificacoes/:id/lida` | Marcar notificação como lida |
+| POST | `/api/academia/aulas/:aulaId/toggle` | Concluir/desfazer aula |
+| PATCH | `/api/perfil` | Atualizar perfil |
+| POST | `/api/demo/restaurar` | Restaurar dados demonstrativos |
+
+## Navegação
+
+As páginas de ativos (**Carteira, Transações, Rentabilidade, Proventos e Análise**) foram
+**removidas do menu lateral** porque ainda não possuem cotação em tempo real. Os arquivos e as
+rotas continuam existindo — basta acessar por URL direta (ex.: `/carteira`) ou recolocar os itens
+em `src/components/layout/Sidebar.tsx` quando houver integração com cotações.
 
 ## Estrutura do projeto
 
 ```
+server/          API Node + Express + Postgres
+  src/
+    index.ts     Servidor e rotas
+    db.ts        Pool de conexões
+    schema.sql   Tabelas
+    auth.ts      JWT + bcrypt + middleware
+    state.ts     Carga do estado e seed de demonstração
+    catalog.ts   Catálogo da Academia e dados iniciais
+    routes/      auth.ts, dados.ts
+
 src/
   components/
     layout/     Sidebar, header mobile, bottom nav, layout geral
@@ -48,7 +96,8 @@ src/
     forms/      Modais de ação (depositar, nova operação, nova meta...)
     shared/     Itens reutilizados entre páginas (linha de movimentação)
   context/
-    AppContext.tsx    Estado global mockado (reducer + localStorage)
+    AuthContext.tsx   Login, cadastro, sessão
+    AppContext.tsx    Estado global vindo da API
     ToastContext.tsx  Notificações "toast"
   lib/
     mockData.ts  Dados iniciais (seed) de todas as telas

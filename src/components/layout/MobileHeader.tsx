@@ -21,15 +21,12 @@ import {
 import { useApp } from '@/context/AppContext'
 import { cn, initials } from '@/lib/utils'
 
+// Páginas de ativos ficam fora do menu (sem cotação em tempo real),
+// mas as rotas continuam funcionando por URL direta.
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/conta-financeira', label: 'Conta Financeira', icon: Landmark },
-  { to: '/carteira', label: 'Carteira', icon: Wallet },
-  { to: '/transacoes', label: 'Transações', icon: ArrowLeftRight },
   { to: '/extrato', label: 'Extrato', icon: FileText },
-  { to: '/rentabilidade', label: 'Rentabilidade', icon: TrendingUp },
-  { to: '/proventos', label: 'Proventos', icon: Gift },
-  { to: '/analise', label: 'Análise', icon: PieChart },
   { to: '/metas', label: 'Metas', icon: Target },
   { to: '/academia', label: 'Academia', icon: BookOpen },
   { to: '/simuladores', label: 'Simuladores', icon: Calculator },

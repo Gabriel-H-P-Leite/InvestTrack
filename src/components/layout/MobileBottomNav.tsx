@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Wallet, ArrowLeftRight, Target, User } from 'lucide-react'
+import { LayoutDashboard, Landmark, FileText, Target, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const ITEMS = [
   { to: '/dashboard', label: 'Início', icon: LayoutDashboard },
-  { to: '/carteira', label: 'Carteira', icon: Wallet },
-  { to: '/transacoes', label: 'Operações', icon: ArrowLeftRight },
+  { to: '/conta-financeira', label: 'Conta', icon: Landmark },
+  { to: '/extrato', label: 'Extrato', icon: FileText },
   { to: '/metas', label: 'Metas', icon: Target },
   { to: '/perfil', label: 'Perfil', icon: User },
 ]
